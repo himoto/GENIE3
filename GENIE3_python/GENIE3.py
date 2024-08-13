@@ -1,5 +1,6 @@
 import time
 from operator import itemgetter
+from typing import Literal
 
 import numpy as np
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
@@ -7,16 +8,22 @@ from sklearn.tree import BaseDecisionTree
 from tqdm import trange
 
 
-def compute_feature_importances(estimator):
+def _compute_feature_importances(estimator):
     if isinstance(estimator, BaseDecisionTree):
         return estimator.tree_.compute_feature_importances(normalize=False)
     else:
         importances = [e.tree_.compute_feature_importances(normalize=False) for e in estimator.estimators_]
         importances = np.array(importances)
-        return sum(importances, axis=0) / len(estimator)
+        return np.sum(importances, axis=0) / len(estimator)
 
 
-def get_link_list(VIM, gene_names=None, regulators="all", maxcount="all", file_name=None):
+def get_link_list(
+    VIM: np.ndarray,
+    gene_names: list[str] | None = None,
+    regulators: int | Literal["all"] = "all",
+    maxcount: int | Literal["all"] = "all",
+    file_name: str | None = None,
+):
     """Gets the ranked list of (directed) regulatory links.
 
     Parameters
@@ -152,7 +159,15 @@ def get_link_list(VIM, gene_names=None, regulators="all", maxcount="all", file_n
                 print("G%d\tG%d\t%.6f" % (TF_idx + 1, target_idx + 1, score))
 
 
-def GENIE3(expr_data, gene_names=None, regulators="all", tree_method="RF", K="sqrt", ntrees=1000, nthreads=1):
+def GENIE3(
+    expr_data: np.ndarray,
+    gene_names: list[str] | None = None,
+    regulators: int | Literal["all"] = "all",
+    tree_method: Literal["RF", "ET"] = "RF",
+    K: int | Literal["sqrt", "all"] = "sqrt",
+    ntrees: int = 1000,
+    nthreads: int = 1,
+):
     """Computation of tree-based scores for all putative regulatory links.
 
     Parameters
@@ -256,7 +271,7 @@ def GENIE3(expr_data, gene_names=None, regulators="all", tree_method="RF", K="sq
     VIM = np.zeros((ngenes, ngenes))
 
     for i in trange(ngenes):
-        vi = GENIE3_single(expr_data, i, input_idx, tree_method, K, ntrees, nthreads)
+        vi = _GENIE3_single(expr_data, i, input_idx, tree_method, K, ntrees, nthreads)
         VIM[i, :] = vi
 
     VIM = np.transpose(VIM)
@@ -267,7 +282,7 @@ def GENIE3(expr_data, gene_names=None, regulators="all", tree_method="RF", K="sq
     return VIM
 
 
-def GENIE3_single(expr_data, output_idx, input_idx, tree_method, K, ntrees, nthreads):
+def _GENIE3_single(expr_data, output_idx, input_idx, tree_method, K, ntrees, nthreads):
 
     ngenes = expr_data.shape[1]
 
@@ -299,7 +314,7 @@ def GENIE3_single(expr_data, output_idx, input_idx, tree_method, K, ntrees, nthr
     treeEstimator.fit(expr_data_input, output)
 
     # Compute importance scores
-    feature_importances = compute_feature_importances(treeEstimator)
+    feature_importances = _compute_feature_importances(treeEstimator)
     vi = np.zeros(ngenes)
     vi[input_idx] = feature_importances
 
